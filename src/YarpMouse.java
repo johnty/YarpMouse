@@ -1,5 +1,6 @@
 
 import processing.core.*;
+import yarp.BufferedPortBottle;
 import yarp.Port;
 import yarp.Bottle;
 
@@ -17,8 +18,7 @@ public class YarpMouse extends PApplet {
 	
 	final static int screen_width = 640;
 	final static int screen_height = 480;
-	private Port port;
-	private Bottle bot;
+	private BufferedPortBottle port;
 	private PFont font;
 	private int mX;
 	private int mY;
@@ -41,10 +41,10 @@ public class YarpMouse extends PApplet {
 
 		size(screen_width, screen_height);
 		background(0);
-		port = new Port();
-		bot = new Bottle();
+		port = new BufferedPortBottle();
 		println("opening yarp port "+ portName);
 		port.open(portName);
+		yarp.Network.connect(portName, "/ofxgvf");
 		mX = 0;
 		mY = 0;
 		mDown = false;
@@ -63,6 +63,11 @@ public class YarpMouse extends PApplet {
 			fill(255);
 		str = "sending pointer location "+ nf((float)mX/screen_width,1,2) + ":" + nf((float)mY/screen_height,1,2);
 		text(str, 10, 75);
+		
+		stroke(255);
+	    if (mousePressed) {
+	    	ellipse(mouseX,mouseY,25,25);
+	    }
 	}
 
 	public void keyPressed() {
@@ -85,13 +90,16 @@ public class YarpMouse extends PApplet {
 		mX = mouseX;
 		mY = mouseY;
 		mDown = true;
-		sendBotBtn(mDown);
 		conditionVals();
-		sendBotXY();
+		sendBotBtn(mDown);
+		
 	}
 
 	public void mouseReleased() {
+		mX = mouseX;
+		mY = mouseY;
 		mDown = false;
+		conditionVals();
 		sendBotBtn(mDown);
 	}
 	
@@ -105,21 +113,50 @@ public class YarpMouse extends PApplet {
 	
 	private void sendBotXY() {
 		//update and send bottle
+		while (port.isWriting()) {
+			//println("waitSnd");
+		}
+		print(".");
+		Bottle bot = new Bottle();
+		bot = port.prepare();
 		bot.clear();
 		bot.addString("/mouse");
 		bot.addDouble((float)mX/screen_width);
 		bot.addDouble((float)mY/screen_height);
-		port.write(bot);
+
+		port.write();
 	}
 	
-	private void sendBotBtn(boolean isUp) {
+	private void sendBotBtn(boolean isDown) {
+		while (port.isWriting()) {
+			//println("waitBtn");
+		}
+		Bottle bot = new Bottle();
+		bot = port.prepare();
 		bot.clear();
 		bot.addString("/mouse");
-		if (isUp)
-			bot.addString("up");
-		else
+		if (isDown) {
 			bot.addString("down");
-		port.write(bot);
+			println("down");
+		}
+		else {
+			bot.addString("up");
+			println("up");
+		}
+		bot.addDouble((float)mX/screen_width);
+		bot.addDouble((float)mY/screen_height);
+		port.write();
+		//this delay is a bit of a hack, for the way
+		// i'm using yarp receive has some issues on the other end
+		// if sending from here was synchronized, it would avoid this...
+		try {
+			Thread.sleep(25);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		
+		
 	}
 
 
